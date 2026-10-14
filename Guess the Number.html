@@ -1,0 +1,128 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Guess the Number</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: one narrow column on graph paper. Range switch, status line, guess form, guess history, and a binary search tip. */
+:root {
+  --paper: #eef1f4; --card: #ffffff; --ink: #14233a; --muted: #5c6b80; --line: #cdd5df;
+  --hot: #e8452c; --good: #1f7a4d;
+  --accent: #14233a; --accent-ink: #eef1f4;
+  --display: "Bricolage Grotesque", "Trebuchet MS", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0f1826; --card: #17233a; --ink: #e7ecf4; --muted: #93a2ba; --line: #2a3a56;
+    --hot: #ffb02e; --good: #6fd39b; --accent: #e7ecf4; --accent-ink: #0f1826; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0f1826; --card: #17233a; --ink: #e7ecf4; --muted: #93a2ba; --line: #2a3a56;
+  --hot: #ffb02e; --good: #6fd39b; --accent: #e7ecf4; --accent-ink: #0f1826; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--paper); color: var(--ink); font-family: var(--mono); font-size: 14px; line-height: 1.5;
+  padding-inline: 16px; padding-block: 28px 56px;
+  background-image: linear-gradient(var(--line) 1px, transparent 1px), linear-gradient(90deg, var(--line) 1px, transparent 1px);
+  background-size: 28px 28px; background-position: -1px -1px;
+}
+main { max-width: 440px; margin-inline: auto; }
+.panel { background: var(--paper); border: 1px solid var(--line); border-radius: 4px; padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; }
+h1 { font-family: var(--display); font-weight: 800; font-size: clamp(2rem, 9vw, 3rem); line-height: 1; letter-spacing: -0.02em; margin: 0; }
+p { margin: 0; color: var(--muted); }
+button, input { font: inherit; }
+button { cursor: pointer; }
+button:focus-visible, input:focus-visible { outline: 3px solid var(--hot); outline-offset: 2px; }
+.tabs { display: flex; gap: 8px; flex-wrap: wrap; }
+.tab { padding: 7px 12px; font-weight: 600; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 4px; }
+.tab[aria-pressed="true"] { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }
+.status { font: 800 1.3rem var(--display); min-height: 1.6em; }
+.row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.guess { flex: 1 1 140px; min-width: 0; font: 600 1.3rem var(--mono); color: var(--ink); background: var(--card); border: 2px solid var(--ink); border-radius: 4px; padding: 9px 12px; }
+.btn { font-weight: 600; padding: 9px 14px; color: var(--accent-ink); background: var(--accent); border: 2px solid var(--accent); border-radius: 4px; }
+.btn:disabled { opacity: 0.45; cursor: default; }
+.hist { display: flex; flex-wrap: wrap; gap: 6px; min-height: 2em; }
+.tag { padding: 3px 9px; border: 1px solid var(--line); border-radius: 999px; background: var(--card); font-variant-numeric: tabular-nums; }
+.tag.hi { color: var(--hot); } .tag.ok { color: var(--good); border-color: var(--good); }
+.stat { display: flex; gap: 18px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.stat b { color: var(--ink); font-weight: 600; }
+.tip { font-size: 12px; }
+</style>
+
+<main>
+  <div class="panel">
+    <h1>Guess the Number</h1>
+    <div class="tabs" id="range" aria-label="Number range">
+      <button class="tab" type="button" data-r="100" aria-pressed="true">1 to 100</button>
+      <button class="tab" type="button" data-r="1000" aria-pressed="false">1 to 1000</button>
+    </div>
+    <p id="intro"></p>
+    <div class="status" id="status" role="status"></div>
+    <form class="row" id="form" autocomplete="off">
+      <input class="guess" id="in" type="number" inputmode="numeric" aria-label="Your guess">
+      <button class="btn" type="submit" id="go">Guess</button>
+    </form>
+    <div class="hist" id="hist"></div>
+    <div class="row">
+      <button class="btn" id="new" type="button">New game</button>
+      <div class="stat"><span>Left <b id="left">7</b></span><span>Wins <b id="wins">0</b></span></div>
+    </div>
+    <p class="tip" id="tip"></p>
+  </div>
+</main>
+
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var secret, left, ended, RANGE = 100, MAXG = 7, wins = 0;
+
+  function newGame() {
+    secret = 1 + Math.floor(Math.random() * RANGE); left = MAXG; ended = false;
+    $("hist").textContent = ""; $("in").value = ""; $("in").disabled = false; $("go").disabled = false;
+    $("in").max = RANGE; $("in").min = 1; $("in").placeholder = "1-" + RANGE;
+    $("left").textContent = left; $("wins").textContent = wins;
+    $("intro").textContent = "I'm thinking of a number from 1 to " + RANGE + ". You have " + MAXG + " guesses.";
+    $("status").textContent = "Make your first guess.";
+    $("tip").innerHTML = "Tip: always guess the middle of the range that is still possible. This is binary search, and " + MAXG + " guesses are always enough for 1 to " + RANGE + " because 2<sup>" + MAXG + "</sup> = " + Math.pow(2, MAXG) + ".";
+  }
+
+  $("form").addEventListener("submit", function (e) {
+    e.preventDefault();
+    if (ended) return;
+    var g = parseInt($("in").value, 10);
+    if (isNaN(g) || g < 1 || g > RANGE) { $("status").textContent = "Enter a whole number from 1 to " + RANGE + "."; return; }
+    left--;
+    var tag = document.createElement("span"); tag.className = "tag"; $("hist").appendChild(tag);
+    if (g === secret) {
+      tag.className = "tag ok"; tag.textContent = g + " ✓";
+      var used = MAXG - left;
+      $("status").textContent = "Got it in " + used + (used === 1 ? " guess!" : " guesses!");
+      wins++; ended = true;
+    } else {
+      tag.className = "tag" + (g > secret ? " hi" : "");
+      tag.textContent = g + (g < secret ? " ↑ higher" : " ↓ lower");
+      if (left === 0) { $("status").textContent = "Out of guesses. It was " + secret + "."; ended = true; }
+      else { $("status").textContent = g < secret ? "Higher." : "Lower."; }
+    }
+    $("left").textContent = left; $("wins").textContent = wins;
+    if (ended) { $("in").disabled = true; $("go").disabled = true; }
+    $("in").value = ""; if (!ended) $("in").focus();
+  });
+
+  $("range").addEventListener("click", function (e) {
+    var r = Number(e.target.getAttribute && e.target.getAttribute("data-r"));
+    if (!r) return;
+    RANGE = r; MAXG = r === 1000 ? 10 : 7;
+    Array.prototype.forEach.call($("range").children, function (t) {
+      t.setAttribute("aria-pressed", Number(t.getAttribute("data-r")) === r ? "true" : "false");
+    });
+    newGame();
+  });
+  $("new").addEventListener("click", newGame);
+  newGame();
+})();
+</script>
+
+</body></html>
