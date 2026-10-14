@@ -2,7 +2,7 @@
 
 Guess the Number is a small web game. The computer picks a secret number, and you guess it using higher and lower hints. Choose a range of 1 to 100 (7 guesses) or 1 to 1000 (10 guesses). It shows your guess history and counts your wins.
 
-Live demo: https://YOUR-USERNAME.github.io/Guess-the-Number/
+Live demo: https://rajshrestha-07.github.io/Guess-The-Number/
 
 Built with: HTML, CSS and JavaScript.
 
